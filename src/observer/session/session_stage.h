@@ -38,7 +38,9 @@ protected:
 
   bool initialize() override;
   void cleanup() override;
+  // event开始时调用
   void handle_event(common::StageEvent *event) override;
+  // event结束时调用
   void callback_event(common::StageEvent *event,
                      common::CallbackContext *context) override;
 
@@ -49,6 +51,7 @@ protected:
   void handle_request(common::StageEvent *event);
 
 private:
+  // 下一个stage
   Stage *resolve_stage_;
   common::SimpleTimer *sql_metric_;
   static const std::string SQL_METRIC_TAG;

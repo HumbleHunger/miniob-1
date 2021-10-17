@@ -168,7 +168,9 @@ void Server::recv(int fd, short ev, void *arg) {
   }
 
   LOG_INFO("receive command(size=%d): %s", data_len, client->buf);
+  // 注册事件
   SessionEvent *sev = new SessionEvent(client);
+  // 交付事件给session_stage
   session_stage_->add_event(sev);
 }
 

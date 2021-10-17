@@ -37,6 +37,7 @@ public:
   int get_request_buf_len();
 
 private:
+  // 维护链接的上下文
   ConnectionContext *client_;
 
   std::string response_;

@@ -143,7 +143,7 @@ void SessionStage::handle_request(StageEvent *event) {
     sev->done_immediate();
     return ;
   }
-
+  // 获取sql语句
   std::string sql = sev->get_request_buf();
   if (common::is_blank(sql.c_str())) {
     sev->done_immediate();
