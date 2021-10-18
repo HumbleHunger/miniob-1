@@ -120,7 +120,7 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
     return;
   }
   exe_event->push_callback(cb);
-
+  // 根据不同的flag执行具体的逻辑
   switch (sql->flag) {
     case SCF_SELECT: { // select
       do_select(current_db, sql, exe_event->sql_event()->session_event());

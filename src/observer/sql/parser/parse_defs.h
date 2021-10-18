@@ -131,7 +131,7 @@ typedef struct {
   const char *relation_name;
   const char *file_name;
 } LoadData;
-
+// 语法结构
 union Queries {
   Selects selection;
   Inserts insertion;
@@ -170,6 +170,7 @@ enum SqlCommandFlag {
 // struct of flag and sql_struct
 typedef struct Query {
   enum SqlCommandFlag flag;
+  // 语法结构
   union Queries sstr;
 } Query;
 

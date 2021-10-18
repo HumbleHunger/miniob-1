@@ -89,7 +89,7 @@ int init_log(ProcessParam *process_cfg, Ini &properties) {
 
     log_file_name = getAboslutPath(log_file_name.c_str());
 
-    LOG_LEVEL log_level = LOG_LEVEL_INFO;
+    LOG_LEVEL log_level = LOG_LEVEL_TRACE;
     key = ("LOG_FILE_LEVEL");
     it = log_section.find(key);
     if (it != log_section.end()) {
@@ -107,7 +107,7 @@ int init_log(ProcessParam *process_cfg, Ini &properties) {
       console_level = (LOG_LEVEL)log;
     }
 
-    LoggerFactory::init_default(log_file_name, log_level, console_level);
+    LoggerFactory::init_default(log_file_name, LOG_LEVEL_TRACE, console_level);
 
     key = ("DefaultLogModules");
     it = log_section.find(key);

@@ -34,6 +34,7 @@ public:
   }
 private:
   SessionEvent *session_event_;
+  // 内部sql语句
   std::string & sql_;
   // void *context_;
 };
