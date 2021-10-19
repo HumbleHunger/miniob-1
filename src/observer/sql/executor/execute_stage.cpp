@@ -131,10 +131,30 @@ void ExecuteStage::handle_request(common::StageEvent *event) {
     case SCF_INSERT:
     case SCF_UPDATE:
     case SCF_DELETE:
-    case SCF_CREATE_TABLE:
+    case SCF_CREATE_TABLE: {
+      StorageEvent *storage_event = new (std::nothrow) StorageEvent(exe_event);
+      if (storage_event == nullptr) {
+        LOG_ERROR("Failed to new StorageEvent");
+        event->done_immediate();
+        return;
+      }
+
+      default_storage_stage_->handle_event(storage_event);
+    }
+    break;
     case SCF_SHOW_TABLES:
     case SCF_DESC_TABLE:
-    case SCF_DROP_TABLE:
+    case SCF_DROP_TABLE: {
+      StorageEvent *storage_event = new (std::nothrow) StorageEvent(exe_event);
+      if (storage_event == nullptr) {
+        LOG_ERROR("Failed to new StorageEvent");
+        event->done_immediate();
+        return;
+      }
+      
+      default_storage_stage_->handle_event(storage_event);
+    }
+    break;
     case SCF_CREATE_INDEX:
     case SCF_DROP_INDEX: 
     case SCF_LOAD_DATA: {

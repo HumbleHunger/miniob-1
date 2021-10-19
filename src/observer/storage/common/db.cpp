@@ -53,13 +53,14 @@ RC Db::init(const char *name, const char *dbpath) {
 
 RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo *attributes) {
   RC rc = RC::SUCCESS;
-  // check table_name
+  // check table_name 是否存在
   if (opened_tables_.count(table_name) != 0) {
     return RC::SCHEMA_TABLE_EXIST;
   }
 
   std::string table_file_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
   Table *table = new Table();
+  // 创建表
   rc = table->create(table_file_path.c_str(), table_name, path_.c_str(), attribute_count, attributes);
   if (rc != RC::SUCCESS) {
     delete table;
@@ -68,6 +69,29 @@ RC Db::create_table(const char *table_name, int attribute_count, const AttrInfo 
 
   opened_tables_[table_name] = table;
   LOG_INFO("Create table success. table name=%s", table_name);
+  return RC::SUCCESS;
+}
+
+RC Db::drop_table(const char *table_name) {
+  RC rc = RC::SUCCESS;
+  // check table_name 是否存在
+  if (opened_tables_.count(table_name) == 0) {
+    return RC::SCHEMA_TABLE_NOT_EXIST;
+  }
+
+  std::string table_file_path = table_meta_file(path_.c_str(), table_name); // 文件路径可以移到Table模块
+  Table *table = find_table(table_name);
+
+  rc = table->drop(table_file_path.c_str(), table_name, path_.c_str());
+
+  if (rc != RC::SUCCESS) {
+    return rc;
+  }
+
+  delete opened_tables_[table_name];
+  opened_tables_.erase(std::string(table_name));
+
+  LOG_INFO("Drop table success. table name=%s", table_name);
   return RC::SUCCESS;
 }
 

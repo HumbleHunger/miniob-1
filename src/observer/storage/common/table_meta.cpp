@@ -51,6 +51,7 @@ RC TableMeta::init_sys_fields() {
   sys_fields_.push_back(field_meta);
   return rc;
 }
+// 初始化表的元数据
 RC TableMeta::init(const char *name, int field_num, const AttrInfo attributes[]) {
   if (nullptr == name || '\0' == name[0]) {
     LOG_ERROR("Name cannot be empty");

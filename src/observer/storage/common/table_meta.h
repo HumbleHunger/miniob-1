@@ -64,6 +64,7 @@ private:
 private:
   std::string   name_;
   std::vector<FieldMeta>  fields_; // 包含sys_fields
+  // 索引
   std::vector<IndexMeta>  indexes_;
 
   int  record_size_ = 0;

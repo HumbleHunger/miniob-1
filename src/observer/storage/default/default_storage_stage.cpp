@@ -150,7 +150,7 @@ void DefaultStorageStage::handle_event(StageEvent *event) {
   Query *sql = storage_event->exe_event()->sqls();
 
   SessionEvent *session_event = storage_event->exe_event()->sql_event()->session_event();
-
+  // 获取会话
   Session *session = session_event->get_client()->session;
   const char *current_db = session->get_current_db().c_str();
 
@@ -190,6 +190,12 @@ void DefaultStorageStage::handle_event(StageEvent *event) {
       const CreateTable &create_table = sql->sstr.create_table;
       rc = handler_->create_table(current_db, create_table.relation_name, 
               create_table.attribute_count, create_table.attributes);
+      snprintf(response, sizeof(response), "%s\n", rc == RC::SUCCESS ? "SUCCESS" : "FAILURE");
+    }
+    break;
+  case SCF_DROP_TABLE: { // drop table
+      const DropTable &drop_table = sql->sstr.drop_table;
+      rc = handler_->drop_table(current_db, drop_table.relation_name);
       snprintf(response, sizeof(response), "%s\n", rc == RC::SUCCESS ? "SUCCESS" : "FAILURE");
     }
     break;

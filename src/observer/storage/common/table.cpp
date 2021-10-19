@@ -45,7 +45,7 @@ Table::~Table() {
 
   LOG_INFO("Table has been closed: %s", name());
 }
-
+// 创建表文件
 RC Table::create(const char *path, const char *name, const char *base_dir, int attribute_count, const AttrInfo attributes[]) {
 
   if (nullptr == name || common::is_blank(name)) {
@@ -62,7 +62,7 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
 
   RC rc = RC::SUCCESS;
 
-  // 使用 table_name.table记录一个表的元数据
+  // 使用文件 table_name.table记录一个表的元数据
   // 判断表文件是否已经存在
 
   int fd = ::open(path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
@@ -109,6 +109,36 @@ RC Table::create(const char *path, const char *name, const char *base_dir, int a
   base_dir_ = base_dir;
   LOG_INFO("Successfully create table %s:%s", base_dir, name);
   return rc;
+}
+
+RC Table::drop(const char *path, const char *name, const char *base_dir)
+{
+  if (nullptr == name || common::is_blank(name)) {
+    LOG_WARN("Name cannot be empty");
+    return RC::INVALID_ARGUMENT;
+  }
+  LOG_INFO("Begin to drop table %s:%s", base_dir, name);
+  
+  RC rc = RC::SUCCESS;
+
+  // 删除表文件.table
+  if (::unlink(path) != 0) {
+    LOG_ERROR("Drop table file failed. filename=%s, errmsg=%d:%s", 
+       path, errno, strerror(errno));
+    return RC::IOERR;
+  }
+  
+  std::string data_file = std::string(base_dir) + "/" + name + TABLE_DATA_SUFFIX;
+
+  // 删除表数据文件.data
+  if (::unlink(data_file.c_str()) != 0) {
+    LOG_ERROR("Drop data file failed. filename=%s, errmsg=%d:%s", 
+       path, errno, strerror(errno));
+    return RC::IOERR;
+  }
+
+  LOG_INFO("Successfully drop table %s:%s", base_dir, name);
+  return rc;  
 }
 
 RC Table::open(const char *meta_file, const char *base_dir) {
@@ -520,7 +550,11 @@ RC Table::create_index(Trx *trx, const char *index_name, const char *attribute_n
 }
 
 RC Table::update_record(Trx *trx, const char *attribute_name, const Value *value, int condition_num, const Condition conditions[], int *updated_count) {
-  return RC::GENERIC_ERROR;
+  RC rc = RC::SUCCESS;
+
+  
+
+  return rc; 
 }
 
 class RecordDeleter {
