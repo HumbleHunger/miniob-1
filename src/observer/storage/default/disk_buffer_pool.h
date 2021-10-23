@@ -35,34 +35,46 @@ typedef int PageNum;
 #define BP_FILE_SUB_HDR_SIZE (sizeof(BPFileSubHeader))
 #define BP_BUFFER_SIZE 50
 #define MAX_OPEN_FILE 1024
-
-typedef struct {
+// page大小4kb
+typedef struct
+{
   PageNum page_num;
   char data[BP_PAGE_DATA_SIZE];
 } Page;
 // sizeof(Page) should be equal to BP_PAGE_SIZE
 
-typedef struct {
+// page的hander
+typedef struct
+{
   PageNum page_count;
+  // 已使用的page数量
   int allocated_pages;
 } BPFileSubHeader;
-
-typedef struct {
+// buffer pool 基本单位
+typedef struct
+{
+  // 脏位
   bool dirty;
+  // 引用计数
   unsigned int pin_count;
+  // 最后访问时间???
   unsigned long acc_time;
+  // 所属文件描述符
   int file_desc;
   Page page;
 } Frame;
 
-typedef struct {
+typedef struct
+{
   bool open;
   Frame *frame;
 } BPPageHandle;
 
-class BPFileHandle{
+class BPFileHandle
+{
 public:
-  BPFileHandle() {
+  BPFileHandle()
+  {
     memset(this, 0, sizeof(*this));
   }
 
@@ -70,25 +82,35 @@ public:
   bool bopen;
   const char *file_name;
   int file_desc;
+  // 文件hander page对应的frame
   Frame *hdr_frame;
+  // 文件的hander page
   Page *hdr_page;
+  // hander page中的bitmap (记录每个page是否被使用?)
   char *bitmap;
+  // hander page中的sub_hander
   BPFileSubHeader *file_sub_header;
-} ;
-
-class BPManager {
+};
+// 缓冲池（buffer pool）
+class BPManager
+{
 public:
-  BPManager(int size = BP_BUFFER_SIZE) {
+  BPManager(int size = BP_BUFFER_SIZE)
+  {
     this->size = size;
+    // 分配50个frame
     frame = new Frame[size];
+    // 分配bitmap表示frame被使用的情况
     allocated = new bool[size];
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
+    {
       allocated[i] = false;
       frame[i].pin_count = 0;
     }
   }
 
-  ~BPManager() {
+  ~BPManager()
+  {
     delete[] frame;
     delete[] allocated;
     size = 0;
@@ -96,11 +118,13 @@ public:
     allocated = nullptr;
   }
 
-  Frame *alloc() {
+  Frame *alloc()
+  {
     return nullptr; // TODO for test
   }
 
-  Frame *get(int file_desc, PageNum page_num) {
+  Frame *get(int file_desc, PageNum page_num)
+  {
     return nullptr; // TODO for test
   }
 
@@ -109,20 +133,24 @@ public:
   bool *getAllocated() { return allocated; }
 
 public:
+  // frame的大小
   int size;
-  Frame * frame = nullptr;
+  // 管理的frame数组
+  Frame *frame = nullptr;
+  // frame使用情况的bitmap
   bool *allocated = nullptr;
 };
 
-class DiskBufferPool {
+class DiskBufferPool
+{
 public:
   /**
-  * 创建一个名称为指定文件名的分页文件
-  */
+   * 创建一个名称为指定文件名的分页文件
+   */
   RC create_file(const char *file_name);
 
   /**
-   * 根据文件名打开一个分页文件，返回文件ID
+   * 根据文件名打开一个分页文件，返回文件在poenfile_list中的索引ID
    * @return
    */
   RC open_file(const char *file_name, int *file_id);
@@ -205,7 +233,9 @@ protected:
   RC flush_block(Frame *frame);
 
 private:
+  // buffer pool manager
   BPManager bp_manager_;
+  // 打开的文件的handle的管理链表(disk manger)
   BPFileHandle *open_list_[MAX_OPEN_FILE] = {nullptr};
 };
 

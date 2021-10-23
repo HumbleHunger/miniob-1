@@ -35,6 +35,7 @@ DiskBufferPool *theGlobalDiskBufferPool()
 
 RC DiskBufferPool::create_file(const char *file_name)
 {
+  // 创建文件
   int fd = open(file_name, O_RDWR | O_CREAT | O_EXCL, S_IREAD | S_IWRITE);
   if (fd < 0) {
     LOG_ERROR("Failed to create %s, due to %s.", file_name, strerror(errno));
@@ -46,28 +47,31 @@ RC DiskBufferPool::create_file(const char *file_name)
   /**
    * Here don't care about the failure
    */
+  // 打开文件
   fd = open(file_name, O_RDWR);
   if (fd < 0) {
     LOG_ERROR("Failed to open for readwrite %s, due to %s.", file_name, strerror(errno));
     return RC::IOERR_ACCESS;
   }
-
+  // 准备file的hander信息并将其写入到file
   Page page;
   memset(&page, 0, sizeof(Page));
-
+  // 将page.data的前8个字节保存hander信息
   BPFileSubHeader *fileSubHeader;
   fileSubHeader = (BPFileSubHeader *)page.data;
+  // 表示文件中已分配的page数为1（hander page）
   fileSubHeader->allocated_pages = 1;
   fileSubHeader->page_count = 1;
 
   char *bitmap = page.data + (int)BP_FILE_SUB_HDR_SIZE;
   bitmap[0] |= 0x01;
+  // 调正文件的读写位置
   if (lseek(fd, 0, SEEK_SET) == -1) {
     LOG_ERROR("Failed to seek file %s to position 0, due to %s .", file_name, strerror(errno));
     close(fd);
     return RC::IOERR_SEEK;
   }
-
+  // 将准备好的file hander写入文件
   if (write(fd, (char *)&page, sizeof(Page)) != sizeof(Page)) {
     LOG_ERROR("Failed to write header to file %s, due to %s.", file_name, strerror(errno));
     close(fd);
@@ -83,6 +87,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
 {
   int fd, i;
   // This part isn't gentle, the better method is using LRU queue.
+  // 在已打开的文件中寻找是否有
   for (i = 0; i < MAX_OPEN_FILE; i++) {
     if (open_list_[i]) {
       if (!strcmp(open_list_[i]->file_name, file_name)) {
@@ -93,26 +98,27 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
     }
   }
   i = 0;
+  // 找到第一个空的位置
   while (i < MAX_OPEN_FILE && open_list_[i++])
     ;
   if (i >= MAX_OPEN_FILE && open_list_[i - 1]) {
     LOG_ERROR("Failed to open file %s, because too much files has been opened.", file_name);
     return RC::BUFFERPOOL_OPEN_TOO_MANY_FILES;
   }
-
+  // 打开文件
   if ((fd = open(file_name, O_RDWR)) < 0) {
     LOG_ERROR("Failed to open file %s, because %s.", file_name, strerror(errno));
     return RC::IOERR_ACCESS;
   }
   LOG_INFO("Successfully open file %s.", file_name);
-
+  // 创建文件的handle
   BPFileHandle *file_handle = new (std::nothrow) BPFileHandle();
   if (file_handle == nullptr) {
     LOG_ERROR("Failed to alloc memory of BPFileHandle for %s.", file_name);
     close(fd);
     return RC::NOMEM;
   }
-
+  // 初始化file_handle
   RC tmp;
   file_handle->bopen = true;
   int file_name_len = strlen(file_name) + 1;
@@ -121,6 +127,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
   cloned_file_name[file_name_len - 1] = '\0';
   file_handle->file_name = cloned_file_name;
   file_handle->file_desc = fd;
+  // 申请一块frame来存储文件page
   if ((tmp = allocate_block(&file_handle->hdr_frame)) != RC::SUCCESS) {
     LOG_ERROR("Failed to allocate block for %s's BPFileHandle.", file_name);
     delete file_handle;
@@ -131,6 +138,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
   file_handle->hdr_frame->acc_time = current_time();
   file_handle->hdr_frame->file_desc = fd;
   file_handle->hdr_frame->pin_count = 1;
+  // 加载文件的hander page
   if ((tmp = load_page(0, file_handle, file_handle->hdr_frame)) != RC::SUCCESS) {
     file_handle->hdr_frame->pin_count = 0;
     dispose_block(file_handle->hdr_frame);
@@ -138,7 +146,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
     delete file_handle;
     return tmp;
   }
-
+  // 加载page信息
   file_handle->hdr_page = &(file_handle->hdr_frame->page);
   file_handle->bitmap = file_handle->hdr_page->data + BP_FILE_SUB_HDR_SIZE;
   file_handle->file_sub_header = (BPFileSubHeader *)file_handle->hdr_page->data;
@@ -433,7 +441,7 @@ RC DiskBufferPool::force_all_pages(BPFileHandle *file_handle)
   }
   return RC::SUCCESS;
 }
-
+// 将dirty的frame刷入disk
 RC DiskBufferPool::flush_block(Frame *frame)
 {
   // The better way is use mmap the block into memory,
@@ -454,11 +462,12 @@ RC DiskBufferPool::flush_block(Frame *frame)
 
   return RC::SUCCESS;
 }
-
+// 在buffer pool中分配一块frame记录disk上的文件内容
 RC DiskBufferPool::allocate_block(Frame **buffer)
 {
 
   // There is one Frame which is free.
+  // 寻找一块未使用的frame，如果找到则返回
   for (int i = 0; i < BP_BUFFER_SIZE; i++) {
     if (!bp_manager_.allocated[i]) {
       bp_manager_.allocated[i] = true;
@@ -467,18 +476,22 @@ RC DiskBufferPool::allocate_block(Frame **buffer)
       return RC::SUCCESS;
     }
   }
-
+  // 如果没有空的frame，则执行淘汰策略
   int min = 0;
   unsigned long mintime = 0;
   bool flag = false;
+  // 使用LRC策略，找到被访问时间最短的frame
   for (int i = 0; i < BP_BUFFER_SIZE; i++) {
+    // 忽略正在被使用的frame
     if (bp_manager_.frame[i].pin_count != 0)
       continue;
+    // 加载第一个frame的acc_time
     if (!flag) {
       flag = true;
       min = i;
       mintime = bp_manager_.frame[i].acc_time;
     }
+    // 寻找frame
     if (bp_manager_.frame[i].acc_time < mintime) {
       min = i;
       mintime = bp_manager_.frame[i].acc_time;
@@ -488,7 +501,7 @@ RC DiskBufferPool::allocate_block(Frame **buffer)
     LOG_ERROR("All pages have been used and pinned.");
     return RC::NOMEM;
   }
-
+  // 如果frame的数据被更改过，则需要刷入disk
   if (bp_manager_.frame[min].dirty) {
     RC rc = flush_block(&(bp_manager_.frame[min]));
     if (rc != RC::SUCCESS) {
