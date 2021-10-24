@@ -38,6 +38,7 @@ typedef int PageNum;
 // page大小4kb
 typedef struct
 {
+  // page的编号
   PageNum page_num;
   char data[BP_PAGE_DATA_SIZE];
 } Page;
@@ -46,6 +47,7 @@ typedef struct
 // page的hander
 typedef struct
 {
+  // 文件中的page总数
   PageNum page_count;
   // 已使用的page数量
   int allocated_pages;
@@ -59,7 +61,7 @@ typedef struct
   unsigned int pin_count;
   // 最后访问时间???
   unsigned long acc_time;
-  // 所属文件描述符
+  // 所属的文件描述符
   int file_desc;
   Page page;
 } Frame;

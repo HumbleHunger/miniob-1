@@ -65,7 +65,7 @@ RC DiskBufferPool::create_file(const char *file_name)
 
   char *bitmap = page.data + (int)BP_FILE_SUB_HDR_SIZE;
   bitmap[0] |= 0x01;
-  // 调正文件的读写位置
+  // 调正文件的读写位置为0
   if (lseek(fd, 0, SEEK_SET) == -1) {
     LOG_ERROR("Failed to seek file %s to position 0, due to %s .", file_name, strerror(errno));
     close(fd);
@@ -127,7 +127,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
   cloned_file_name[file_name_len - 1] = '\0';
   file_handle->file_name = cloned_file_name;
   file_handle->file_desc = fd;
-  // 申请一块frame来存储文件page
+  // 申请一块frame来存储文件hander page
   if ((tmp = allocate_block(&file_handle->hdr_frame)) != RC::SUCCESS) {
     LOG_ERROR("Failed to allocate block for %s's BPFileHandle.", file_name);
     delete file_handle;
@@ -138,7 +138,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
   file_handle->hdr_frame->acc_time = current_time();
   file_handle->hdr_frame->file_desc = fd;
   file_handle->hdr_frame->pin_count = 1;
-  // 加载文件的hander page
+  // 加载文件的hander page到frame
   if ((tmp = load_page(0, file_handle, file_handle->hdr_frame)) != RC::SUCCESS) {
     file_handle->hdr_frame->pin_count = 0;
     dispose_block(file_handle->hdr_frame);
@@ -146,7 +146,7 @@ RC DiskBufferPool::open_file(const char *file_name, int *file_id)
     delete file_handle;
     return tmp;
   }
-  // 加载page信息
+  // 设置file_handle
   file_handle->hdr_page = &(file_handle->hdr_frame->page);
   file_handle->bitmap = file_handle->hdr_page->data + BP_FILE_SUB_HDR_SIZE;
   file_handle->file_sub_header = (BPFileSubHeader *)file_handle->hdr_page->data;
@@ -166,6 +166,7 @@ RC DiskBufferPool::close_file(int file_id)
 
   BPFileHandle *file_handle = open_list_[file_id];
   file_handle->hdr_frame->pin_count--;
+  // 移除该文件在buffer中所有的page
   if ((tmp = force_all_pages(file_handle)) != RC::SUCCESS) {
     file_handle->hdr_frame->pin_count++;
     LOG_ERROR("Failed to closeFile %d:%s, due to failed to force all pages.", file_id, file_handle->file_name);
@@ -203,6 +204,7 @@ RC DiskBufferPool::get_this_page(int file_id, PageNum page_num, BPPageHandle *pa
       continue;
 
     // This page has been loaded.
+    // 如果page已经被加载到buffer中则直接获取并返回
     if (bp_manager_.frame[i].page.page_num == page_num) {
       page_handle->frame = bp_manager_.frame + i;
       page_handle->frame->pin_count++;
@@ -243,8 +245,10 @@ RC DiskBufferPool::allocate_page(int file_id, BPPageHandle *page_handle)
   BPFileHandle *file_handle = open_list_[file_id];
 
   int byte = 0, bit = 0;
+  // 如果文件中有空闲page，则直接使用
   if ((file_handle->file_sub_header->allocated_pages) < (file_handle->file_sub_header->page_count)) {
     // There is one free page
+    // 在文件中找到一个空的page
     for (int i = 0; i < file_handle->file_sub_header->page_count; i++) {
       byte = i / 8;
       bit = i % 8;
@@ -278,6 +282,7 @@ RC DiskBufferPool::allocate_page(int file_id, BPPageHandle *page_handle)
   page_handle->frame->page.page_num = file_handle->file_sub_header->page_count - 1;
 
   // Use flush operation to extion file
+  // 将新分配的page刷入disk
   if ((tmp = flush_block(page_handle->frame)) != RC::SUCCESS) {
     LOG_ERROR("Failed to alloc page %s , due to failed to extend one page.", file_handle->file_name);
     return tmp;
@@ -347,6 +352,7 @@ RC DiskBufferPool::dispose_page(int file_id, PageNum page_num)
     if (bp_manager_.frame[i].page.page_num == page_num) {
       if (bp_manager_.frame[i].pin_count != 0)
         return RC::BUFFERPOOL_PAGE_PINNED;
+      // 将buffer中对应的frame设置为未使用
       bp_manager_.allocated[i] = false;
     }
   }
@@ -354,6 +360,7 @@ RC DiskBufferPool::dispose_page(int file_id, PageNum page_num)
   file_handle->hdr_frame->dirty = true;
   file_handle->file_sub_header->allocated_pages--;
   // file_handle->pFileSubHeader->pageCount--;
+  // 将file的bitmap中对应的bit改为0
   char tmp = 1 << (page_num % 8);
   file_handle->bitmap[page_num / 8] &= ~tmp;
   return RC::SUCCESS;
@@ -422,14 +429,14 @@ RC DiskBufferPool::flush_all_pages(int file_id)
 
 RC DiskBufferPool::force_all_pages(BPFileHandle *file_handle)
 {
-
+  // 遍历buffer_pool的page，找到属于该文件的page并移除
   for (int i = 0; i < BP_BUFFER_SIZE; i++) {
     if (!bp_manager_.allocated[i])
       continue;
 
     if (bp_manager_.frame[i].file_desc != file_handle->file_desc)
       continue;
-
+    // 将dirty的frame刷入disk
     if (bp_manager_.frame[i].dirty) {
       RC rc = flush_block(&bp_manager_.frame[i]);
       if (rc != RC::SUCCESS) {
@@ -462,7 +469,7 @@ RC DiskBufferPool::flush_block(Frame *frame)
 
   return RC::SUCCESS;
 }
-// 在buffer pool中分配一块frame记录disk上的文件内容
+// 在buffer pool中分配一块未使用的frame
 RC DiskBufferPool::allocate_block(Frame **buffer)
 {
 
@@ -562,13 +569,14 @@ RC DiskBufferPool::check_page_num(PageNum page_num, BPFileHandle *file_handle)
     LOG_ERROR("Invalid pageNum:%d, file's name:%s", page_num, file_handle->file_name);
     return RC::BUFFERPOOL_INVALID_PAGE_NUM;
   }
+  // 检查page_num是否被使用
   if ((file_handle->bitmap[page_num / 8] & (1 << (page_num % 8))) == 0) {
     LOG_ERROR("Invalid pageNum:%d, file's name:%s", page_num, file_handle->file_name);
     return RC::BUFFERPOOL_INVALID_PAGE_NUM;
   }
   return RC::SUCCESS;
 }
-
+// 根据文件fd和page ID加载page
 RC DiskBufferPool::load_page(PageNum page_num, BPFileHandle *file_handle, Frame *frame)
 {
   s64_t offset = ((s64_t)page_num) * sizeof(Page);
